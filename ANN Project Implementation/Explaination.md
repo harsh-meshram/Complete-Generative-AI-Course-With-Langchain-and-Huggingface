@@ -279,4 +279,278 @@ Save scaler (pickle)
 
 ---
 
+---
+
+# 🧠 ANN Implementation — Cell by Cell Explanation
+
+Ab data preprocessing complete ho chuka hai. Ab hum **Artificial Neural Network (ANN)** build, train, aur save karenge!
+
+---
+
+## 🔧 Cell 14 (Markdown) — Section Header
+
+```markdown
+# ANN Implementation
+```
+
+### 🔍 Explanation:
+
+Yeh sirf ek **heading cell** hai jo notebook mein visually separate karta hai ki ab se ANN (Artificial Neural Network) ka implementation shuru ho raha hai.
+
+---
+
+## 📦 Cell 15 — Deep Learning Libraries Import karna
+
+```python
+import tensorflow
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.callbacks import EarlyStopping, TensorBoard
+import datetime
+```
+
+### 🔍 Explanation:
+
+- **`tensorflow`** — Yeh Google ka **deep learning framework** hai. Isse hum neural networks banate, train karte, aur deploy karte hain. Yeh GPU acceleration bhi support karta hai.
+- **`Sequential`** — Yeh ek model type hai jisme layers **ek ke baad ek (sequentially)** lagti hain — jaise ek pipe mein paani ek direction mein behta hai. Simple feedforward networks ke liye best hai.
+- **`Dense`** — Yeh **fully connected layer** hai. Iska matlab hai ki is layer ka har neuron pichli layer ke har neuron se connected hai. Yeh ANN ki building block hai.
+- **`EarlyStopping`** — Yeh ek **callback** hai. Agar training ke dauran model improve hona band ho jaye (val_loss barhne lage), toh yeh automatically training rok deta hai. Isse **overfitting** se bachte hain.
+- **`TensorBoard`** — Yeh ek **visualization tool** hai jo training ke dauran loss, accuracy, weights, biases wagairah ke graphs dikhata hai. Real-time monitoring ke liye use hota hai.
+- **`datetime`** — Yeh Python ka built-in module hai jo current date-time deta hai. Isko TensorBoard ke log folder ka unique naam banane ke liye use kiya hai.
+
+---
+
+## 🏗️ Cell 16 — ANN Model Build karna
+
+```python
+model = Sequential([
+    Dense(64, activation='relu', input_shape=(X_train.shape[1],)),  # HL 1
+    Dense(32, activation='relu'), # HL 2
+    Dense(1, activation='sigmoid') # o/p layer
+])
+```
+
+### 🔍 Explanation:
+
+Yahan hum **3 layers** ka ek neural network bana rahe hain:
+
+**Layer 1 — Hidden Layer 1:**
+- `Dense(64)` — **64 neurons** hain is layer mein.
+- `activation='relu'` — **ReLU (Rectified Linear Unit)** activation function use ho raha hai: `f(x) = max(0, x)`. Matlab agar input negative hai toh output 0, agar positive hai toh wahi value. Yeh deep learning mein sabse popular activation hai kyunki yeh **vanishing gradient problem** solve karta hai.
+- `input_shape=(X_train.shape[1],)` — Pehli layer mein batana padta hai ki input mein kitne features hain. `X_train.shape[1]` = **12 features** (humne preprocessing mein 12 columns rakhe the).
+
+**Layer 2 — Hidden Layer 2:**
+- `Dense(32)` — **32 neurons**. Layer 1 se choti hai — yeh ek common practice hai ki layers progressively chhoti hoti jaayein (64 → 32 → 1). Isse model **abstract features** seekhna shuru karta hai.
+- `activation='relu'` — Same ReLU activation.
+
+**Layer 3 — Output Layer:**
+- `Dense(1)` — Sirf **1 neuron** kyunki yeh **binary classification** hai (Exited: 0 ya 1).
+- `activation='sigmoid'` — **Sigmoid function** output ko 0 se 1 ke beech laata hai. Yeh probability deta hai — jaise 0.85 matlab 85% chance hai ki customer chhod dega. Agar output > 0.5, toh class 1 (Exited), warna class 0 (Not Exited).
+
+> 🧠 **Architecture Diagram:**
+> ```
+> Input (12 features) → [Dense 64, ReLU] → [Dense 32, ReLU] → [Dense 1, Sigmoid] → Output (0 or 1)
+> ```
+
+---
+
+## 📊 Cell 17 — Model Summary dekhna
+
+```python
+model.summary()
+```
+
+### 🔍 Explanation:
+
+Yeh model ki poori structure dikhata hai:
+
+| Layer | Output Shape | Parameters |
+|---|---|---|
+| dense_3 (Dense) | (None, 64) | **832** |
+| dense_4 (Dense) | (None, 32) | **2080** |
+| dense_5 (Dense) | (None, 1) | **33** |
+| **Total** | | **2,945** |
+
+**Parameters kaise calculate hote hain?**
+- Layer 1: `(12 inputs × 64 neurons) + 64 biases = 768 + 64 = 832`
+- Layer 2: `(64 inputs × 32 neurons) + 32 biases = 2048 + 32 = 2080`
+- Layer 3: `(32 inputs × 1 neuron) + 1 bias = 32 + 1 = 33`
+
+> 🧠 **Formula:** `Parameters = (inputs × neurons) + biases`
+> Har neuron ka apna ek bias hota hai — yeh intercept jaisa kaam karta hai (jaise y = mx + **b** mein b).
+
+---
+
+## ⚙️ Cell 18 — Optimizer aur Loss Function Define karna
+
+```python
+opt = tensorflow.keras.optimizers.Adam(learning_rate = 0.01)
+loss = tensorflow.keras.losses.BinaryCrossentropy()
+loss
+```
+
+### 🔍 Explanation:
+
+- **`Adam` Optimizer** — Yeh sabse popular optimizer hai. Yeh **learning rate ko automatically adjust** karta hai training ke dauran. `SGD` se bahut better aur faster converge karta hai.
+  - `learning_rate = 0.01` — Model kitne bade steps mein seekhega. Bahut bada hoga toh optimal point miss ho jayega, bahut chhota hoga toh bahut slow seekhega. 0.01 ek reasonable starting point hai.
+
+- **`BinaryCrossentropy`** — Yeh binary classification ke liye standard **loss function** hai. Yeh measure karta hai ki predicted probability actual label se kitni door hai.
+  - Formula: `Loss = -[y·log(p) + (1-y)·log(1-p)]`
+  - Jahan `y` = actual label (0 ya 1), `p` = predicted probability.
+  - Agar model sahi predict karta hai toh loss kam, galat karta hai toh loss zyada.
+
+---
+
+## 🔨 Cell 19 — Model Compile karna
+
+```python
+model.compile(optimizer=opt, loss="binary_crossentropy", metrics=['accuracy'])
+```
+
+### 🔍 Explanation:
+
+- **`compile()`** — Model ko training ke liye ready karta hai. Teen cheezein specify karni padti hain:
+  1. **`optimizer`** — Weights kaise update hone chahiye (Adam use kar rahe hain)
+  2. **`loss`** — Galti kaise measure karni hai (Binary Crossentropy)
+  3. **`metrics`** — Training ke dauran kya track karna hai — yahan **accuracy** track ho rahi hai
+
+> 🧠 **Analogy:** Compile karna aise hai jaise exam se pehle decide karna ki — konsi pen se likhenge (optimizer), marks kaise calculate honge (loss), aur result kaise dekhenge (metrics).
+
+---
+
+## 📈 Cell 20 — TensorBoard Setup karna
+
+```python
+log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d - %H%M%S")
+tensorflow_callback = TensorBoard(log_dir=log_dir, histogram_freq=1)
+```
+
+### 🔍 Explanation:
+
+- **`log_dir`** — Ek unique folder bana rahe hain jisme training logs store honge. `datetime.datetime.now().strftime(...)` current timestamp deta hai (e.g., `20260301 - 204530`), taaki har run ki logs alag folder mein jaayein.
+- **`TensorBoard(log_dir=log_dir, histogram_freq=1)`** — TensorBoard callback create kiya:
+  - `histogram_freq=1` — Har epoch ke baad weights aur biases ke **histograms** bhi log honge. Yeh visualize karna helpful hai ki training ke dauran model ke parameters kaise change ho rahe hain.
+
+> 🧠 **TensorBoard kya hai?** Yeh ek web-based dashboard hai (localhost:6006 pe) jahan aap training curves dekh sakte ho — loss kaise gir raha hai, accuracy kaise badh rahi hai, etc. Debugging ke liye bahut powerful tool hai.
+
+---
+
+## 🛑 Cell 21 — Early Stopping Setup karna
+
+```python
+early_stopping_callback = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+```
+
+### 🔍 Explanation:
+
+- **`monitor='val_loss'`** — **Validation loss** ko monitor kar raha hai. Hum chahte hain ki model unseen data pe bhi accha perform kare, sirf training data pe nahi.
+- **`patience=10`** — Agar **10 consecutive epochs** tak val_loss improve nahi hua (kam nahi hua), toh training ruk jayegi. Yeh overfitting rokta hai.
+- **`restore_best_weights=True`** — Jab training ruke, tab model ke weights ko **sabse acche epoch** ke weights pe reset kar dega. Matlab last epoch ke weights nahi, balki jis epoch pe val_loss sabse kam tha woh weights use honge.
+
+> 🧠 **Concept — Overfitting kya hai?**
+> Jab model training data ko toh bahut accha seekh le (ratta laga le) lekin naye data pe galat predict kare — isko overfitting kehte hain. Early Stopping isse rokta hai by stopping training at the right time.
+
+---
+
+## 🏋️ Cell 22 — Model Training karna
+
+```python
+history = model.fit(
+    X_train, Y_train, validation_data = (X_test, Y_test), epochs = 100,
+    callbacks = [tensorflow_callback, early_stopping_callback]
+)
+```
+
+### 🔍 Explanation:
+
+- **`model.fit()`** — Yeh actual mein model ko **train** karta hai.
+- **`X_train, Y_train`** — Training data pe seekhega.
+- **`validation_data = (X_test, Y_test)`** — Har epoch ke baad test data pe evaluate karega (taaki overfitting check ho sake).
+- **`epochs = 100`** — Maximum 100 baar poora training data dekhega. Lekin Early Stopping lagayi hai toh zaruri nahi ki 100 tak jaye.
+- **`callbacks`** — Dono callbacks pass kiye — TensorBoard (logging ke liye) + EarlyStopping (overfitting rokne ke liye).
+- **`history`** — Training ki history return hoti hai — loss, accuracy, val_loss, val_accuracy har epoch ki. Yeh baad mein plotting ke liye use ho sakti hai.
+
+**Training Output Results:**
+- Model **15 epochs** mein ruk gaya (Early Stopping ne rok diya).
+- **Final Training Accuracy: ~87%**
+- **Final Validation Accuracy: ~86%**
+- Training aur validation accuracy close hain — matlab model ne **na overfitting ki, na underfitting** — ek accha generalized model ban gaya! ✅
+
+---
+
+## 💾 Cell 23 — Trained Model ko Save karna
+
+```python
+model.save('model.h5')
+```
+
+### 🔍 Explanation:
+
+- **`.save('model.h5')`** — Poore trained model ko (architecture + weights + optimizer state) ek **HDF5 file** mein save kar diya.
+- `.h5` format purana (legacy) hai — naye versions mein `.keras` format recommended hai. Lekin `.h5` bhi perfectly kaam karta hai.
+- Baad mein `tensorflow.keras.models.load_model('model.h5')` se load karke direct predictions le sakte hain bina dobara training kiye.
+
+> 🧠 **Kyun save karte hain?** Training mein time aur compute lagta hai. Ek baar train karke save karo, phir jab chahiye tab load karke use karo — jaise ek trained employee ko hire karna vs. naye ko train karna!
+
+---
+
+## 📊 Cell 24 — TensorBoard Extension Load karna
+
+```python
+%reload_ext tensorboard
+```
+
+### 🔍 Explanation:
+
+- **`%reload_ext`** — Yeh ek **Jupyter magic command** hai. Yeh TensorBoard extension ko Jupyter notebook ke andar reload karta hai.
+- Isse TensorBoard notebook ke andar hi render ho sakta hai, alag browser tab kholne ki zarurat nahi.
+
+---
+
+## 📊 Cell 25 — TensorBoard Launch karna
+
+```python
+%tensorboard --logdir logs/fit
+```
+
+### 🔍 Explanation:
+
+- **`%tensorboard`** — Yeh directly notebook mein TensorBoard dashboard embed kar deta hai.
+- **`--logdir logs/fit`** — Batata hai ki logs kahan se padhne hain. Humne training ke dauran logs `logs/fit/` folder mein save kiye the.
+- Yeh **localhost:6006** pe TensorBoard start karta hai jahan aap dekh sakte ho:
+  - **Loss curves** — Training loss vs Validation loss
+  - **Accuracy curves** — Training accuracy vs Validation accuracy
+  - **Histograms** — Weights aur biases kaise change ho rahe hain har epoch mein
+  - **Distributions** — Layers ke parameters ka distribution
+
+---
+
+## 🎯 Complete ANN Pipeline Summary
+
+```
+📦 Import Libraries (TensorFlow, Keras)
+    ↓
+🏗️ Build Model (Sequential: 64 → 32 → 1 neurons)
+    ↓
+📊 Check Model Summary (2,945 trainable parameters)
+    ↓
+⚙️ Define Optimizer (Adam, lr=0.01) & Loss (Binary Crossentropy)
+    ↓
+🔨 Compile Model
+    ↓
+📈 Setup TensorBoard (logging)
+    ↓
+🛑 Setup Early Stopping (patience=10)
+    ↓
+🏋️ Train Model (stopped at epoch 15, ~86% accuracy)
+    ↓
+💾 Save Model (model.h5)
+    ↓
+📊 Visualize in TensorBoard
+    ↓
+✅ ANN Model Ready for Predictions!
+```
+
+---
+
 > Koi bhi cell ya concept clearly nahi samajh aaya toh poocho, main aur detail mein samjha dunga! 😊
