@@ -341,6 +341,31 @@ Yahan hum **3 layers** ka ek neural network bana rahe hain:
 
 **Layer 2 — Hidden Layer 2:**
 - `Dense(32)` — **32 neurons**. Layer 1 se choti hai — yeh ek common practice hai ki layers progressively chhoti hoti jaayein (64 → 32 → 1). Isse model **abstract features** seekhna shuru karta hai.
+
+> 🧠 **"Abstract Features Seekhna" ka Matlab:**
+>
+> **Layer-by-Layer kya hota hai:**
+>
+> | Layer | Neurons | Kya seekhta hai? |
+> |-------|---------|-------------------|
+> | **Layer 1 (64)** | Zyada neurons | **Low-level / basic features** — jaise raw data ke simple patterns (e.g., "age zyada hai", "salary kam hai") |
+> | **Layer 2 (32)** | Kam neurons | **Abstract / high-level features** — pehle layer ke basic patterns ko **combine** karke complex relationships banata hai (e.g., "age zyada hai AUR salary bhi zyada hai toh churn kam hoga") |
+> | **Layer 3 (1)** | Ek neuron | **Final decision** — sab abstract features ko milake ek final prediction deta hai (0 ya 1) |
+>
+> **"Abstract" ka simple meaning:** Abstract = wo cheez jo **directly data mein dikhti nahi**, lekin model usse khud seekh leta hai.
+>
+> **Example:** Socho tumhare paas customer ka data hai — `age`, `salary`, `credit_score`, `balance`.
+> - **Basic feature:** "Credit score 300 se kam hai" ← yeh directly data mein dikh raha hai
+> - **Abstract feature:** "Yeh customer financially unstable hai" ← yeh kisi ek column mein nahi likha, lekin model ne `credit_score` + `balance` + `salary` ko **combine** karke yeh pattern khud seekh liya
+>
+> **Layers progressively chhoti kyun hoti hain?**
+> ```
+> 64 neurons → bahut saare basic patterns detect karo
+> 32 neurons → un patterns ko compress/combine karke abstract meaning nikalo
+>  1 neuron  → final answer do
+> ```
+> Yeh ek **funnel (깔때기) jaisa** kaam karta hai — pehle bahut saari information collect hoti hai, phir woh **summarize** hoti jaati hai, aur end mein ek **single decision** aata hai.
+
 - `activation='relu'` — Same ReLU activation.
 
 **Layer 3 — Output Layer:**
