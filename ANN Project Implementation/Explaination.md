@@ -578,4 +578,238 @@ model.save('model.h5')
 
 ---
 
+
+---
+
+---
+
+# 🔮 Prediction Notebook — `prediction.ipynb` Explanation
+
+Ab humara model train ho chuka hai aur save bhi ho gaya hai. Ab hum ek **naye customer ka data** deke predict karenge ki woh bank chhod dega ya nahi. Yeh notebook exactly wahi karta hai!
+
+---
+
+```python
+import tensorflow
+from tensorflow.keras.models import load_model
+import pickle
+import pandas as pd
+import numpy as np
+```
+
+Libraries import ki:
+
+- **`tensorflow`** — Google ka deep learning framework.
+- **`load_model`** — Saved trained model (`.h5` file) ko load karta hai. Dobara training ki zarurat nahi!
+- **`pickle`** — Saved encoders aur scaler ko load karne ke liye (`.pkl` files).
+- **`pandas`** — Data ko DataFrame format mein handle karne ke liye.
+- **`numpy`** — Numerical operations ke liye (prediction output numpy array mein aata hai).
+
+---
+
+```python
+model = load_model('model.h5')
+
+with open('ohe_geo.pkl', 'rb') as file:
+    ohe_geo = pickle.load(file)
+
+with open('label_encode_gender.pkl', 'rb') as file:
+    label_encode_gender = pickle.load(file)
+
+with open('scaler.pkl', 'rb') as file:
+    scaler = pickle.load(file)
+```
+
+Yahan 4 cheezein load ho rahi hain:
+
+- **`model.h5`** — Trained ANN model load kiya (architecture + weights + optimizer sab stored hai).
+- **`ohe_geo.pkl`** — Geography ka **OneHotEncoder** load kiya (France/Germany/Spain → 3 binary columns).
+- **`label_encode_gender.pkl`** — Gender ka **LabelEncoder** load kiya (Male → 1, Female → 0).
+- **`scaler.pkl`** — **StandardScaler** load kiya (features ko normalize karne ke liye).
+
+> 🧠 **Important:** Yeh wahi objects hain jo training mein save kiye the. Naye nahi bana rahe — kyunki naye banayenge toh mapping alag ho jayegi aur prediction galat aayega!
+
+---
+
+```python
+input_data = {
+    'CreditScore': 600,
+    'Geography': 'France',
+    'Gender': 'Male',
+    'Age': 40,
+    'Tenure': 3,
+    'Balance': 60000,
+    'NumOfProducts': 2,
+    'HasCrCard': 1,
+    'IsActiveMember': 1,
+    'EstimatedSalary': 50000
+}
+```
+
+Ek naye customer ka data dictionary mein define kiya — yeh woh customer hai jiske liye hum predict karenge ki woh bank chhod dega ya nahi.
+
+---
+
+```python
+geo_encoded = ohe_geo.transform([[input_data['Geography']]]).toarray()
+geo_encoded_df = pd.DataFrame(geo_encoded, columns=ohe_geo.get_feature_names_out(['Geography']))
+geo_encoded_df
+```
+
+`'France'` ko OneHotEncoder se encode kiya → `[1.0, 0.0, 0.0]`. Double brackets `[[...]]` isliye kyunki encoder ko 2D input chahiye. `.toarray()` sparse matrix ko normal array banata hai. Phir DataFrame bana diya column names ke saath (`Geography_France`, `Geography_Germany`, `Geography_Spain`).
+
+---
+
+```python
+input_df = pd.DataFrame([input_data])
+input_df
+```
+
+Dictionary ko DataFrame mein convert kiya — kyunki encoding aur scaling DataFrame pe kaam karte hain.
+
+---
+
+```python
+input_df['Gender'] = label_encode_gender.transform(input_df['Gender'])
+input_df
+```
+
+Gender ko LabelEncoder se encode kiya — `Male` → `1`, `Female` → `0`. Sirf `transform` use kiya, `fit_transform` nahi — kyunki encoder pehle se trained hai.
+
+---
+
+```python
+input_df = pd.concat([input_df.drop("Geography", axis=1), geo_encoded_df], axis=1)
+input_df
+```
+
+Original `Geography` text column hataya aur one-hot encoded columns (`Geography_France`, `Geography_Germany`, `Geography_Spain`) jod diye. Ab DataFrame mein **12 numerical columns** hain — exactly training data jaisi.
+
+---
+
+```python
+input_scaled = scaler.transform(input_df)
+input_scaled
+```
+
+Saved StandardScaler se data normalize kiya. Saari values ab `-1 se +1` ke around aa gayi. Sirf `transform` kiya — training ke mean/std se scale ho raha hai.
+
+### 📏 `scaler.transform()` — Detail Explanation:
+
+**StandardScaler ka formula:**
+
+```
+z = (x - mean) / std
+```
+
+- `x` = original value
+- `mean` = us feature ka average (training data se calculate hua tha)
+- `std` = us feature ka standard deviation (training data se calculate hua tha)
+- `z` = scaled/normalized value
+
+**`transform` vs `fit_transform` — Yeh kyun important hai?**
+
+Training ke time (`experiments.ipynb` mein):
+```python
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)  # fit + transform
+```
+- **`fit`** → Training data ka har column ka `mean` aur `std` calculate karke **yaad kar liya**
+- **`transform`** → Phir uss mean/std se values ko scale kar diya
+
+Prediction ke time (`prediction.ipynb` mein):
+```python
+input_scaled = scaler.transform(input_df)  # sirf transform
+```
+- **Sirf `transform`** — Wahi **purane mean/std** (jo training data se aaye the) use karke naye data ko scale kar raha hai
+- **`fit` nahi kar rahe** — Kyunki agar naye data ka apna mean/std calculate karenge toh scale alag ho jayega aur model confuse ho jayega
+
+**Example:** Maan lo training data mein `Balance` column ka mean = 76,000 aur std = 62,000. Naye customer ka `Balance = 60,000`:
+
+```
+z = (60,000 - 76,000) / 62,000 = -16,000 / 62,000 = -0.258
+```
+
+Yahi `-0.258` output mein dikh raha hai Balance ke liye!
+
+**Actual output — har feature ka scaled value:**
+
+| Feature | Original Value | Scaled Value | Matlab |
+|---|---|---|---|
+| CreditScore | 600 | -0.536 | Average se thoda neeche |
+| Gender | 1 (Male) | 0.913 | Average se upar |
+| Age | 40 | 0.105 | Average ke aas-paas |
+| Tenure | 3 | -0.695 | Average se neeche |
+| Balance | 60,000 | -0.258 | Average se thoda kam |
+| NumOfProducts | 2 | 0.808 | Average se upar |
+| HasCrCard | 1 | 0.649 | Average se upar |
+| IsActiveMember | 1 | 0.975 | Average se kaafi upar |
+| EstimatedSalary | 50,000 | -0.877 | Average se kaafi neeche |
+| Geo_France | 1.0 | 1.002 | France hai |
+| Geo_Germany | 0.0 | -0.579 | Germany nahi |
+| Geo_Spain | 0.0 | -0.576 | Spain nahi |
+
+**Scaling kyun zaroori hai?** Bina scaling ke `Balance = 60,000` aur `HasCrCard = 1` — model ko lagega Balance zyada important hai kyunki value badi hai. Scaling ke baad sab features **same scale** pe aa jaate hain, toh model fair comparison kar pata hai.
+
+---
+
+```python
+prediction = model.predict(input_scaled)
+prediction
+```
+
+Scaled data ko model mein daala. Sigmoid output layer ne probability di: **`0.0267`** (2.67%) — matlab is customer ke churn chances bahut kam hain.
+
+> 🧠 **Yaad karo:** Sigmoid output = probability. Jitna 1 ke paas, utna zyada chance ki customer chhod dega. Jitna 0 ke paas, utna kam chance.
+
+---
+
+```python
+prediction_proba = prediction[0][0]
+prediction_proba
+```
+
+`prediction` ek 2D array hai `[[0.02668187]]`. `[0][0]` se single number nikala = `0.026681866`.
+
+---
+
+```python
+if prediction_proba > 0.5:
+    print('The customer is likely to churn.')
+else:
+    print('The customer is not likely to churn.')
+```
+
+Probability `0.5` se compare ki. `0.0267` < `0.5`, toh output: **"The customer is not likely to churn."** ✅
+
+> 🧠 **0.5 threshold kyun?** Yeh binary classification ka standard threshold hai. Lekin real-world mein business requirement ke hisaab se change ho sakta hai — jaise bank conservative hona chahta hai toh 0.3 bhi rakh sakte hain.
+
+---
+
+## 🎯 Complete Prediction Pipeline Summary
+
+```
+📂 Load Model + Encoders + Scaler
+    ↓
+📝 Naye customer ka data define karo
+    ↓
+🌍 Geography One-Hot Encode karo (France → [1,0,0])
+    ↓
+📊 DataFrame mein convert karo
+    ↓
+🏷️ Gender Label Encode karo (Male → 1)
+    ↓
+🔗 Encoded columns merge karo (12 features ready)
+    ↓
+📏 Scale karo (StandardScaler se normalize)
+    ↓
+🔮 Model.predict() se probability nikalo
+    ↓
+✅ Probability > 0.5? → Churn! | ≤ 0.5? → Not Churn!
+```
+
+**Is customer ka result:** Probability = 2.67% → **Not likely to churn** 🟢
+
+---
+
 > Koi bhi cell ya concept clearly nahi samajh aaya toh poocho, main aur detail mein samjha dunga! 😊
