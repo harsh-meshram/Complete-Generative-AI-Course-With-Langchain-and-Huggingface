@@ -812,4 +812,232 @@ Probability `0.5` se compare ki. `0.0267` < `0.5`, toh output: **"The customer i
 
 ---
 
+---
+
+# 🎛️ Hyperparameter Tuning — `hypertunningANN.ipynb` Explanation
+
+## 🤔 Pehle samajhte hain — Hyperparameter Tuning kya hai?
+
+Jab humne `experiments.ipynb` mein ANN banaya tha, toh humne **khud decide kiya** tha ki 64 neurons honge, 32 neurons honge, epochs 100 honge, etc. Lekin **kaise pata** ki yeh values best hain? Shayad 128 neurons zyada accha result dete!
+
+**Hyperparameter Tuning** ka matlab hai — **automatically bahut saari combinations try karna** aur dekhna ki kaunsa combination **sabse accha accuracy** deta hai. Yeh ek **brute-force search** hai best settings ke liye.
+
+---
+
+## 📦 Cell 1 — Libraries Import karna
+
+```python
+import pandas as pd
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.preprocessing import StandardScaler, LabelEncoder, OneHotEncoder
+from sklearn.pipeline import Pipeline
+from scikeras.wrappers import KerasClassifier
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.callbacks import EarlyStopping
+import pickle
+```
+
+### 🔍 Explanation:
+
+Pehle wali imports toh same hain. Naye important ones:
+
+- **`GridSearchCV`** — **Grid Search with Cross-Validation**. Har possible combination of hyperparameters try karta hai aur har combination ko cross-validation se evaluate karta hai.
+- **`KerasClassifier`** (`scikeras.wrappers` se) — Keras model ko sklearn-compatible wrapper mein wrap karta hai. `GridSearchCV` sirf sklearn-style models ke saath kaam karta hai, toh yeh bridge ka kaam karta hai.
+- **`Pipeline`** — Multiple steps ko chain karta hai (import hua hai lekin actually use nahi hua notebook mein).
+
+> 🧠 **Key Concept:** TensorFlow/Keras ke models directly sklearn ka `GridSearchCV` nahi samajhte. `KerasClassifier` dono duniya ko jod deta hai!
+
+---
+
+## 📊 Cell 2 — Data Load karna
+
+```python
+data = pd.read_csv('Churn_Modelling.csv')
+```
+
+### 🔍 Explanation:
+
+Same Churn Modelling dataset load kiya — same as `experiments.ipynb`.
+
+---
+
+## 🔧 Cell 3 — Data Preprocessing + Encoders Load karna
+
+```python
+data = data.drop(['RowNumber', 'CustomerId', 'Surname'], axis=1)
+
+label_encode_gender = LabelEncoder()
+data['Gender'] = label_encode_gender.fit_transform(data['Gender'])
+
+ohe_geo = OneHotEncoder()
+geo_encoder = ohe_geo.fit_transform(data[['Geography']])
+geo_en_df = pd.DataFrame(geo_encoder.toarray(), columns=ohe_geo.get_feature_names_out(['Geography']))
+
+data = pd.concat([data.drop('Geography', axis=1), geo_en_df], axis=1)
+
+X = data.drop('Exited', axis=1)
+Y = data['Exited']
+
+X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
+
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+# load the encoder & scaler
+with open('ohe_geo.pkl', 'rb') as file:
+    ohe_geo=pickle.load(file)
+
+with open('label_encode_gender.pkl', 'rb') as file:
+    label_encode_gender=pickle.load(file)
+
+with open('scaler.pkl', 'rb') as file:
+    scaler=pickle.load(file)
+```
+
+### 🔍 Explanation:
+
+**Exact same preprocessing** jo `experiments.ipynb` mein kiya tha — drop, encode, split, scale. Plus pichle saved pickle files bhi load kiye.
+
+> ⚠️ **Note:** Code mein ek redundancy hai — pehle naye encoder/scaler fit kiye, phir pickle se purane load kiye. Actually sirf pickle se load karna kaafi hota.
+
+---
+
+## 🏗️ Cell 4 — Model Creation Function banana
+
+```python
+def create_model(neurons=32, layers=1):
+    model = Sequential()
+    model.add(Dense(neurons, activation='relu', input_shape=(X_train.shape[1],)))
+
+    for _ in range(layers-1):
+        model.add(Dense(neurons, activation='relu'))
+
+    model.add(Dense(1, activation='sigmoid'))
+    model.compile(optimizer='adam', loss="binary_crossentropy", metrics=["accuracy"])
+
+    return model
+```
+
+### 🔍 Explanation:
+
+Yeh sabse **important cell** hai! Ek **function** banaya jo **dynamically model create** karta hai:
+
+- **`neurons`** — Har hidden layer mein kitne neurons honge (default: 32)
+- **`layers`** — Total kitni hidden layers hongi (default: 1)
+
+**Kaise kaam karta hai:**
+1. Pehli hidden layer add hoti hai `neurons` neurons ke saath + ReLU
+2. `for` loop se **baaki ki hidden layers** add hoti hain (`layers-1` baar)
+3. Output layer — 1 neuron + sigmoid
+4. Model compile hota hai Adam + Binary Crossentropy ke saath
+
+**Example:**
+
+| Call | Architecture |
+|---|---|
+| `create_model(32, 1)` | Input → [32, ReLU] → [1, Sigmoid] |
+| `create_model(64, 2)` | Input → [64, ReLU] → [64, ReLU] → [1, Sigmoid] |
+| `create_model(128, 3)` | Input → [128, ReLU] → [128, ReLU] → [128, ReLU] → [1, Sigmoid] |
+
+> 🧠 **Kyun function?** `GridSearchCV` ko ek function chahiye jo different parameters ke saath **naya model** bana sake. Har combination ke liye fresh model zaroori hai!
+
+---
+
+## 🎯 Cell 5 — KerasClassifier Wrapper banana
+
+```python
+model = KerasClassifier(layers=1, neurons=32, build_fn=create_model, epochs=50, batch_size=10, verbose=0)
+```
+
+### 🔍 Explanation:
+
+- **`KerasClassifier`** — Keras model ko sklearn-compatible bana deta hai.
+- **`build_fn=create_model`** — Batata hai ki model banane ke liye konsa function call karna hai.
+- **`epochs=50, batch_size=10`** — Default training settings.
+- **`verbose=0`** — Training output print nahi hoga (bahut models train hongi, spam hoga warna).
+
+> 🧠 **Analogy:** Yeh ek "template" hai — GridSearchCV isko lega, different values daalega, har baar naya model banayega aur test karega.
+
+---
+
+## 📋 Cell 6 — Parameter Grid Define karna
+
+```python
+param_grid = {
+    'neurons': [16, 32, 64, 128],
+    'layers': [1, 2],
+    'epochs': [50, 100]
+}
+```
+
+### 🔍 Explanation:
+
+| Hyperparameter | Values to Try |
+|---|---|
+| `neurons` | 16, 32, 64, 128 |
+| `layers` | 1, 2 |
+| `epochs` | 50, 100 |
+
+**Total combinations** = 4 × 2 × 2 = **16 unique model configurations**
+
+---
+
+## 🔍 Cell 7 — GridSearchCV Run karna
+
+```python
+grid = GridSearchCV(estimator=model, param_grid=param_grid, n_jobs=-1, cv=3, verbose=1)
+grid_result = grid.fit(X_train, Y_train)
+
+print("Best: %f using %s" % (grid_result.best_score_, grid_result.best_params_))
+```
+
+### 🔍 Explanation:
+
+- **`n_jobs=-1`** — **Saare CPU cores** use karo parallel processing ke liye.
+- **`cv=3`** — **3-Fold Cross-Validation**:
+  - Fold 1: Part 1+2 pe train, Part 3 pe test
+  - Fold 2: Part 1+3 pe train, Part 2 pe test
+  - Fold 3: Part 2+3 pe train, Part 1 pe test
+  - Teeno scores ka average = final score
+
+**Total models trained:** 16 combinations × 3 folds = **48 model trainings!**
+
+> ⚠️ Notebook mein yeh **KeyboardInterrupt** pe ruk gaya — bahut time lag raha tha (deep learning ka GridSearch bahut heavy hota hai).
+
+---
+
+## 🎯 Overall Hyperparameter Tuning Summary
+
+```
+📊 Load & Preprocess Data
+    ↓
+🏗️ Define create_model() function (dynamic architecture)
+    ↓
+🎯 Wrap with KerasClassifier (sklearn compatibility)
+    ↓
+📋 Define param_grid (16 combinations)
+    ↓
+🔍 Run GridSearchCV (16 × 3 folds = 48 trainings)
+    ↓
+🏆 Find Best Parameters!
+```
+
+## 🧠 Important Concepts:
+
+| Concept | Explanation |
+|---|---|
+| **Hyperparameters** | Settings jo programmer set karta hai (neurons, layers, epochs) — model nahi seekhta inhe |
+| **Parameters** | Weights & biases — model training ke dauran khud seekhta hai |
+| **GridSearchCV** | Har possible combination try karta hai (exhaustive search) |
+| **Cross-Validation** | Data ko multiple folds mein baant ke robust evaluation karta hai |
+| **KerasClassifier** | Keras model ko sklearn mein compatible banata hai |
+
+> ⚠️ **Pro Tip:** GridSearchCV slow hai deep learning ke liye. Real-world mein `RandomizedSearchCV`, `Keras Tuner`, ya `Optuna` zyada efficient hain.
+
+---
+
+> Koi bhi concept clearly nahi samajh aaya toh poocho! 😊
 
