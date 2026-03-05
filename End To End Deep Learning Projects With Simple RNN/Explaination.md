@@ -290,3 +290,311 @@ Raw Text → One-Hot Integers → Padding → Embedding Layer → Dense Vectors
 ```
 
 > 💡 **Key Takeaway:** Yeh notebook word embedding ka **foundation** hai. Real projects (jaise sentiment analysis with RNN/LSTM) mein isi Embedding layer ko model ke first layer ke roop mein use karte hain, aur training ke dauran yeh vectors automatically learn ho jaate hain!
+
+---
+
+---
+
+# 🔄 `simplernn.ipynb` — IMDB Sentiment Analysis with Simple RNN (Hinglish)
+
+## 🤔 RNN kya hai aur kyun chahiye?
+
+ANN mein har input **independent** hota hai. Lekin **text/sentences** mein sequence matter karta hai — "not good" aur "good" mein ek word ka order poora meaning badal deta hai! **RNN (Recurrent Neural Network)** **sequential data** ke liye design hua hai — yeh pichle words ko "yaad" rakh ke current word process karta hai.
+
+**Is notebook mein:** IMDB movie reviews se predict karenge ki review **positive** hai ya **negative** — yeh ek **Sentiment Analysis** problem hai.
+
+---
+
+## 📦 Cell 1 — Libraries Import karna
+
+```python
+import numpy as np
+import tensorflow as tensorflow
+from tensorflow.keras.datasets import imdb
+from tensorflow.keras.preprocessing import sequence
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Embedding, SimpleRNN, Dense
+```
+
+### 🔍 Explanation:
+
+- **`numpy`** — Numerical arrays ke liye.
+- **`imdb`** — Keras ka built-in **IMDB movie reviews dataset**. 50,000 reviews hain — already numbers mein converted.
+- **`sequence`** — `pad_sequences` function ke liye — review lengths ko uniform banane ke liye.
+- **`Embedding`** — 🔑 Har word ke integer ID ko ek **dense vector** mein convert karti hai. Jaise `"good"` → `[0.2, 0.8, -0.1, ...]`. Model training ke dauran seekhti hai ki kaunse words similar hain.
+- **`SimpleRNN`** — Basic **Recurrent Neural Network** layer. Har word ko process karti hai aur **pichle words ki memory** rakhti hai.
+- **`Dense`** — Fully connected output layer.
+
+---
+
+## 📊 Cell 2 — IMDB Dataset Load karna
+
+```python
+max_features = 10000  # vocabulary size
+
+(X_train, y_train), (X_test, y_test) = imdb.load_data(num_words=max_features)
+
+print(f'Training data shape: {X_train.shape}, Training labels shape: {y_train.shape}')
+print(f'Testing Data shape: {y_test.shape}, Testing labels shape: {y_test.shape}')
+```
+
+### 🔍 Explanation:
+
+- **`max_features = 10000`** — Sirf **top 10,000 most frequent words** use karenge. Rare words ko ignore karenge.
+- **`imdb.load_data(num_words=max_features)`** — Dataset load hota hai — pehle se split hai:
+  - **25,000 training reviews** + labels
+  - **25,000 testing reviews** + labels
+- **Labels:** `1` = Positive review, `0` = Negative review
+- Dataset **pre-processed** hai — reviews text nahi, **integer sequences** hain.
+
+### 🎯 Train-Test Split kya hai?
+
+```
+Total Data: 50,000 reviews
+        ↓
+   ┌──────────────┬───────────────┐
+   │  Training    │   Testing     │
+   │  25,000      │   25,000      │
+   │  Model isse  │  Model ne yeh │
+   │  SEEKHEGA    │  KABHI NAHI    │
+   │  (padhai)    │  DEKHA (exam)  │
+   └──────────────┴───────────────┘
+```
+
+- **Training Data** → Model isse patterns seekhega
+- **Testing Data** → Unseen data pe check karenge ki model ne actually seekha ya nahi
+
+---
+
+## 👀 Cell 3 — Ek Sample Review dekhna
+
+```python
+X_train[0], y_train[0]
+```
+
+### 🔍 Explanation:
+
+- Pehla review dikhata hai — integers ki list `[1, 14, 22, 16, 43, 530, ...]`
+- Label = `1` (Positive review)
+- Har number ek word ko represent karta hai
+
+---
+
+## 🔍 Cell 4 — Sample Review Inspect karna
+
+```python
+sample_review = X_train[0]
+sample_label = y_train[0]
+print(f'Sample review as integers: {sample_review}')
+print(f'Sample label: {sample_label}')
+```
+
+### 🔍 Explanation:
+
+Review ko variables mein store karke print kiya — confirm karne ke liye ki ek review integers ki list hai aur label 0 ya 1 hai.
+
+---
+
+## 📖 Cell 5 — Word Index Dictionary dekhna
+
+```python
+word_index = imdb.get_word_index()
+word_index
+```
+
+### 🔍 Explanation:
+
+- **`get_word_index()`** — Dictionary return karta hai: word → integer mapping
+  - `'kids': 359`, `'much': 73`, `'the': 1`, etc.
+  - Frequent word = chhota number
+- Dictionary mein **88,000+ words** hain, lekin hum sirf top 10,000 use kar rahe hain.
+
+---
+
+## 🔄 Cell 6 — Reverse Word Index banana
+
+```python
+reverse_word_index = {value: key for key, value in word_index.items()}
+reverse_word_index
+```
+
+### 🔍 Explanation:
+
+- Original: `{'good': 42, ...}` (word → number)
+- **Reverse:** `{42: 'good', ...}` (number → word)
+- Integers se wapas **readable text** banane ke liye!
+
+---
+
+## 📝 Cell 7 — Review ko Readable Text mein Convert karna
+
+```python
+decoded_review = ' '.join([reverse_word_index.get(i-3, '?') for i in sample_review])
+decoded_review
+```
+
+### 🔍 Explanation:
+
+- **`i-3`** kyun? IMDB mein pehle 3 indices reserved hain: `0`=padding, `1`=start, `2`=unknown. Actual words index 3 se shuru hote hain.
+- **Result:** *"this film was just brilliant casting location scenery story direction..."*
+- Label `1` (positive) sahi confirm hua ✅
+
+---
+
+## 📏 Cell 8 — Sequences ko Pad karna
+
+```python
+max_len = 500
+
+X_train = sequence.pad_sequences(X_train, maxlen=max_len)
+X_test = sequence.pad_sequences(X_test, maxlen=max_len)
+
+X_train
+```
+
+### 🔍 Explanation:
+
+- **Problem:** Har review ki length alag (koi 100, koi 800 words). Neural network ko **fixed size input** chahiye!
+- **Solution:** `pad_sequences` — saari reviews ko **500 words** par set kiya:
+  - Chhoti review → **shuruaat mein 0s add** (padding)
+  - Badi review → **shuruaat ke words kaat diye** (truncation)
+
+---
+
+## 👀 Cell 9 — Test Data Check
+
+```python
+X_test
+```
+
+Test data bhi 500 length mein padded ho gaya — confirm kiya.
+
+---
+
+## 🏗️ Cell 10 — Simple RNN Model Build karna
+
+```python
+model = Sequential()
+model.add(Embedding(max_features, 128, input_length=max_len))
+model.add(SimpleRNN(128, activation='relu'))
+model.add(Dense(1, activation='sigmoid'))
+```
+
+### 🔍 Explanation:
+
+**Layer 1 — Embedding:**
+- `Embedding(10000, 128, input_length=500)` — har word ID ko **128-dim vector** mein convert karta hai. Similar words ke vectors close honge. Training mein seekhe jaate hain.
+
+**Layer 2 — SimpleRNN:**
+- `SimpleRNN(128, activation='relu')` — **128 units ki memory.** Har word pe:
+  1. Current word ka embedding leta hai
+  2. Previous hidden state (pichle words ki memory) leta hai
+  3. New hidden state generate karta hai
+- 500 words baad, final state = poore review ka **"summary"**
+
+**Layer 3 — Output:**
+- `Dense(1, activation='sigmoid')` — Positive (1) ya Negative (0)
+
+> 🧠 **RNN ka Flow:**
+> ```
+> Word₁ → Embedding → RNN(state₁)
+> Word₂ → Embedding → RNN(state₂ = f(state₁, word₂))
+> ...
+> Word₅₀₀ → Embedding → RNN(state₅₀₀) → Dense → Positive/Negative
+> ```
+
+---
+
+## 📊 Cell 11 — Model Summary
+
+```python
+model.summary()
+```
+
+| Layer | Output Shape | Parameters |
+|---|---|---|
+| Embedding | (None, 500, 128) | **1,280,000** |
+| SimpleRNN | (None, 128) | **32,896** |
+| Dense | (None, 1) | **129** |
+| **Total** | | **1,313,025** |
+
+**Parameters:** Embedding = `10000 × 128 = 1.28M`, SimpleRNN = `(128+128) × 128 + 128 = 32,896`, Dense = `128 + 1 = 129`
+
+---
+
+## 🔨 Cell 12 — Model Compile
+
+```python
+model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+```
+
+Adam optimizer + Binary Crossentropy loss (positive/negative binary classification).
+
+---
+
+## 🛑 Cell 13 — Early Stopping Setup
+
+```python
+from tensorflow.keras.callbacks import EarlyStopping
+earlystopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+```
+
+- **`patience=5`** — 5 epochs improvement nahi toh training ruko.
+- **`restore_best_weights=True`** — Best epoch ke weights restore karo.
+
+---
+
+## 🏋️ Cell 14 — Model Training
+
+```python
+history = model.fit(
+    X_train, y_train, epochs=10, batch_size=32,
+    validation_split=0.2,
+    callbacks=[earlystopping]
+)
+```
+
+### 🔍 Training Results:
+
+| Epoch | Loss | Accuracy | Val Accuracy |
+|---|---|---|---|
+| 1 | 51.6 | 61.58% | 65.66% |
+| 2+ | **NaN** ❌ | ~50% | ~50% |
+
+### ⚠️ NaN Loss Problem:
+
+Model **explode** ho gaya! SimpleRNN mein **vanishing/exploding gradient** problem hota hai. Long sequences (500 words) mein gradients bahut bade ho jaate hain. **Solutions:** `tanh` activation, LSTM/GRU use karo, Gradient Clipping lagao.
+
+---
+
+## 🎯 Complete Pipeline Summary
+
+```
+📦 Import Libraries
+    ↓
+📊 Load IMDB Dataset (25K train + 25K test)
+    ↓
+📖 Word Index + Reverse Index (number ↔ word)
+    ↓
+📝 Decode Review (integers → text)
+    ↓
+📏 Pad Sequences (length = 500)
+    ↓
+🏗️ Build Model (Embedding → SimpleRNN → Dense)
+    ↓
+🔨 Compile + Early Stopping
+    ↓
+🏋️ Train (NaN issue ← gradient explosion!)
+```
+
+## 🧠 Key Concepts:
+
+| Concept | Explanation |
+|---|---|
+| **RNN** | Sequential data ke liye — pichle inputs ki "memory" rakhta hai |
+| **Embedding** | Words ko dense vectors mein convert karta hai |
+| **Padding** | Sequences ko same length banana |
+| **Vanishing/Exploding Gradient** | Long sequences mein SimpleRNN ki weakness |
+| **LSTM/GRU** | SimpleRNN ke advanced versions — gradient problem solve karte hain |
+
+> 💡 **Pro Tip:** Real projects mein **LSTM** ya **GRU** use karte hain — SimpleRNN sirf learning ke liye hai!
